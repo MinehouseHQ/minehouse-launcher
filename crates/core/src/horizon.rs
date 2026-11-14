@@ -700,7 +700,12 @@ pub fn session_json(session: &Session) -> serde_json::Value {
     v
 }
 
-pub fn build_args(inst: &Installed, game_dir: &Path, options: Option<&[String]>) -> Vec<String> {
+pub fn build_args(
+    inst: &Installed,
+    game_dir: &Path,
+    options: Option<&[String]>,
+    auto_join: bool,
+) -> Vec<String> {
     let s = |p: &Path| p.to_string_lossy().into_owned();
     let mut args = vec![
         "--resources".into(),
@@ -712,7 +717,7 @@ pub fn build_args(inst: &Installed, game_dir: &Path, options: Option<&[String]>)
         "--session-stdin".into(),
     ];
     let knows = |o: &str| options.is_none_or(|list| list.iter().any(|n| n == o));
-    if knows("--quickPlayMultiplayer") {
+    if auto_join && knows("--quickPlayMultiplayer") {
         args.push("--quickPlayMultiplayer".into());
         args.push(inst.server.clone());
     }
@@ -725,12 +730,13 @@ pub async fn launch(
     paths: &Paths,
     inst: &Installed,
     session: &Session,
+    auto_join: bool,
     reporter: &Reporter,
 ) -> Result<()> {
     let game = paths.game_dir();
     tokio::fs::create_dir_all(&game).await?;
     let options = client_options(inst).await;
-    let args = build_args(inst, &game, options.as_deref());
+    let args = build_args(inst, &game, options.as_deref(), auto_join);
     let mut child = command(&inst.client, &game)
         .args(&args)
         .stdin(Stdio::piped())
@@ -887,7 +893,7 @@ aa9bf9383ae4e926d5f9c2ca8be997e843a6cf590fc3c8c04162a26718adeabd  horizon-source
             },
             server: "play.minehouse.pro".into(),
         };
-        let args = build_args(&inst, Path::new("/g"), None);
+        let args = build_args(&inst, Path::new("/g"), None, true);
         assert_eq!(
             args,
             [
@@ -903,7 +909,9 @@ aa9bf9383ae4e926d5f9c2ca8be997e843a6cf590fc3c8c04162a26718adeabd  horizon-source
             ]
         );
         let old = vec!["--resources".to_string(), "--game-dir".into()];
-        assert!(!build_args(&inst, Path::new("/g"), Some(&old))
+        assert!(!build_args(&inst, Path::new("/g"), Some(&old), true)
+            .contains(&"--quickPlayMultiplayer".into()));
+        assert!(!build_args(&inst, Path::new("/g"), None, false)
             .contains(&"--quickPlayMultiplayer".into()));
 
         let s = Session {

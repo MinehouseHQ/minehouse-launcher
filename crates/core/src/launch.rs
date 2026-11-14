@@ -45,7 +45,7 @@ pub fn build_args(
     session: &Session,
     settings: &Settings,
 ) -> Vec<String> {
-    let env = Env::current().with_feature("is_quick_play_multiplayer", true);
+    let env = Env::current().with_feature("is_quick_play_multiplayer", settings.auto_join);
     let sep = if cfg!(windows) { ";" } else { ":" };
     let classpath = inst
         .classpath

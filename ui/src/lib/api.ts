@@ -11,6 +11,8 @@ export type Settings = {
   offline_profiles: string[]
   active_profile: string | null
   system_java: boolean
+  /** Сразу заходить на сервер после запуска игры */
+  auto_join: boolean
 }
 
 export type Account = { name: string; uuid: string }

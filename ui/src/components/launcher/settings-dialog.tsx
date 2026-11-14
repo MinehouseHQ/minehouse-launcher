@@ -88,6 +88,20 @@ export function SettingsDialog({
         </div>
 
         <div className="flex items-center justify-between gap-4">
+          <div className="grid gap-1">
+            <Label htmlFor="auto-join">Сразу заходить на сервер</Label>
+            <p className="text-xs text-muted-foreground">
+              Если выключить, игра откроется в главном меню
+            </p>
+          </div>
+          <Switch
+            id="auto-join"
+            checked={s.auto_join}
+            onCheckedChange={(v) => setS((p) => ({ ...p, auto_join: v }))}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
           <Label htmlFor="close-on-launch">Скрывать лаунчер во время игры</Label>
           <Switch
             id="close-on-launch"
