@@ -65,122 +65,125 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-5 sm:max-w-md">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-5 overflow-hidden sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Настройки</DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-3">
-          <div className="flex items-center justify-between">
-            <Label>Память для игры</Label>
-            <span className="text-sm font-medium tabular-nums">{memLabel(s.memory_mb)}</span>
-          </div>
-          <Slider
-            min={2048}
-            max={16384}
-            step={512}
-            value={[s.memory_mb]}
-            onValueChange={(v) => {
-              const n = Array.isArray(v) ? v[0] : v
-              setS((p) => ({ ...p, memory_mb: n }))
-            }}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="grid gap-1">
-            <Label htmlFor="auto-join">Сразу заходить на сервер</Label>
-            <p className="text-xs text-muted-foreground">
-              Если выключить, игра откроется в главном меню
-            </p>
-          </div>
-          <Switch
-            id="auto-join"
-            checked={s.auto_join}
-            onCheckedChange={(v) => setS((p) => ({ ...p, auto_join: v }))}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="close-on-launch">Скрывать лаунчер во время игры</Label>
-          <Switch
-            id="close-on-launch"
-            checked={s.close_on_launch}
-            onCheckedChange={(v) => setS((p) => ({ ...p, close_on_launch: v }))}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="grid gap-1">
-            <Label htmlFor="system-java">Java с компьютера</Label>
-            <p className="text-xs text-muted-foreground">
-              Если нужная версия уже установлена, лаунчер не скачивает свою
-            </p>
-          </div>
-          <Switch
-            id="system-java"
-            checked={s.system_java}
-            onCheckedChange={(v) => setS((p) => ({ ...p, system_java: v }))}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="jvm">Доп. параметры Java</Label>
-          <Input
-            id="jvm"
-            className="font-mono"
-            placeholder="например -XX:+UseZGC"
-            spellCheck={false}
-            value={s.extra_jvm_args}
-            onChange={(e) => setS((p) => ({ ...p, extra_jvm_args: e.target.value }))}
-          />
-        </div>
-
-        <Separator />
-
-        {info.can_move_data && (
-          <div className="grid gap-2">
-            <Label>Папка для игры и сборок</Label>
-            <DataDirField
-              path={info.data_dir}
-              defaultPath={info.default_data_dir}
-              disabled={playing || mover.moving}
-              onPick={setTarget}
+        {/* Прокручивается, если окно лаунчера ниже настроек; шапка и «Готово» на месте. */}
+        <div className="-mx-4 grid min-h-0 content-start gap-5 overflow-y-auto px-4">
+          <div className="grid gap-3">
+            <div className="flex items-center justify-between">
+              <Label>Память для игры</Label>
+              <span className="text-sm font-medium tabular-nums">{memLabel(s.memory_mb)}</span>
+            </div>
+            <Slider
+              min={2048}
+              max={16384}
+              step={512}
+              value={[s.memory_mb]}
+              onValueChange={(v) => {
+                const n = Array.isArray(v) ? v[0] : v
+                setS((p) => ({ ...p, memory_mb: n }))
+              }}
             />
-            {mover.moving && (
-              <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" />
-                {mover.stage}
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="grid gap-1">
+              <Label htmlFor="auto-join">Сразу заходить на сервер</Label>
+              <p className="text-xs text-muted-foreground">
+                Если выключить, игра откроется в главном меню
               </p>
-            )}
-            {mover.error && (
-              <Alert variant="destructive">
-                <AlertDescription>{mover.error}</AlertDescription>
-              </Alert>
+            </div>
+            <Switch
+              id="auto-join"
+              checked={s.auto_join}
+              onCheckedChange={(v) => setS((p) => ({ ...p, auto_join: v }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="close-on-launch">Скрывать лаунчер во время игры</Label>
+            <Switch
+              id="close-on-launch"
+              checked={s.close_on_launch}
+              onCheckedChange={(v) => setS((p) => ({ ...p, close_on_launch: v }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="grid gap-1">
+              <Label htmlFor="system-java">Java с компьютера</Label>
+              <p className="text-xs text-muted-foreground">
+                Если нужная версия уже установлена, лаунчер не скачивает свою
+              </p>
+            </div>
+            <Switch
+              id="system-java"
+              checked={s.system_java}
+              onCheckedChange={(v) => setS((p) => ({ ...p, system_java: v }))}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="jvm">Доп. параметры Java</Label>
+            <Input
+              id="jvm"
+              className="font-mono"
+              placeholder="например -XX:+UseZGC"
+              spellCheck={false}
+              value={s.extra_jvm_args}
+              onChange={(e) => setS((p) => ({ ...p, extra_jvm_args: e.target.value }))}
+            />
+          </div>
+
+          <Separator />
+
+          {info.can_move_data && (
+            <div className="grid gap-2">
+              <Label>Папка для игры и сборок</Label>
+              <DataDirField
+                path={info.data_dir}
+                defaultPath={info.default_data_dir}
+                disabled={playing || mover.moving}
+                onPick={setTarget}
+              />
+              {mover.moving && (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {mover.stage}
+                </p>
+              )}
+              {mover.error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{mover.error}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => invoke("open_game_dir")}>
+              <FolderOpen />
+              Папка сборки
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onOpenChange(false)
+                onOnboarding()
+              }}
+            >
+              Знакомство с лаунчером
+            </Button>
+            {info.account && (
+              <Button variant="destructive" onClick={logout}>
+                <LogOut />
+                Выйти из аккаунта
+              </Button>
             )}
           </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => invoke("open_game_dir")}>
-            <FolderOpen />
-            Папка сборки
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              onOpenChange(false)
-              onOnboarding()
-            }}
-          >
-            Знакомство с лаунчером
-          </Button>
-          {info.account && (
-            <Button variant="destructive" onClick={logout}>
-              <LogOut />
-              Выйти из аккаунта
-            </Button>
-          )}
         </div>
 
         <DialogFooter className="items-center sm:justify-between">
