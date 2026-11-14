@@ -18,6 +18,8 @@ pub struct Settings {
     pub active_profile: Option<String>,
     /// Use a fitting Java already on the computer instead of downloading one.
     pub system_java: bool,
+    /// Join the server right after the game starts (quick play); off = main menu.
+    pub auto_join: bool,
 }
 
 impl Default for Settings {
@@ -29,6 +31,7 @@ impl Default for Settings {
             offline_profiles: Vec::new(),
             active_profile: None,
             system_java: true,
+            auto_join: true,
         }
     }
 }

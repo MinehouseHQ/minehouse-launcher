@@ -50,7 +50,12 @@ async fn main() -> Result<()> {
         }
         Some("horizon") => {
             let inst = minehouse_core::horizon::install(&paths, &reporter).await?;
-            let args = minehouse_core::horizon::build_args(&inst, &paths.game_dir(), None);
+            let args = minehouse_core::horizon::build_args(
+                &inst,
+                &paths.game_dir(),
+                None,
+                Settings::load(&paths).auto_join,
+            );
             println!("{} {}", inst.client.display(), args.join(" "));
         }
         Some("ping") => println!(

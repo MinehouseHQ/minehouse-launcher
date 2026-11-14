@@ -1010,9 +1010,11 @@ async fn play(app: State<'_, Arc<App>>, handle: AppHandle) -> Res<()> {
                     }
                 })
         }
-        Ready::Horizon(installed) => horizon::launch(&paths, installed, &session, &reporter)
-            .await
-            .map_err(err),
+        Ready::Horizon(installed) => {
+            horizon::launch(&paths, installed, &session, settings.auto_join, &reporter)
+                .await
+                .map_err(err)
+        }
     };
     drop(lock);
     // Back when the last game closes.
