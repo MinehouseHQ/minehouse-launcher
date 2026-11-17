@@ -992,7 +992,7 @@ async fn play(app: State<'_, Arc<App>>, handle: AppHandle) -> Res<()> {
 
     enum Ready {
         Fabric(Box<install::Installed>),
-        Horizon(horizon::Installed),
+        Horizon(Box<horizon::Installed>),
     }
     let kind = config.active().kind;
     let ready = {
@@ -1001,9 +1001,9 @@ async fn play(app: State<'_, Arc<App>>, handle: AppHandle) -> Res<()> {
             instances::Kind::Fabric => Ready::Fabric(Box::new(
                 install::install(&paths, &reporter).await.map_err(err)?,
             )),
-            instances::Kind::Horizon => {
-                Ready::Horizon(horizon::install(&paths, &reporter).await.map_err(err)?)
-            }
+            instances::Kind::Horizon => Ready::Horizon(Box::new(
+                horizon::install(&paths, &reporter).await.map_err(err)?,
+            )),
         }
     };
 
