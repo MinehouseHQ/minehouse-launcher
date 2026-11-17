@@ -7,6 +7,7 @@ import { Onboarding } from "@/components/launcher/onboarding"
 import { NewsStrip } from "@/components/launcher/news-strip"
 import { LogPanel } from "@/components/launcher/log-panel"
 import { LoginDialog } from "@/components/launcher/login-dialog"
+import { HorizonModsDialog } from "@/components/launcher/horizon-mods-dialog"
 import { ModsDialog, type ModsTab } from "@/components/launcher/mods-dialog"
 import { PacksDialog } from "@/components/launcher/packs-dialog"
 import { SettingsDialog } from "@/components/launcher/settings-dialog"
@@ -30,6 +31,7 @@ export function App() {
     kind: "resource",
     dropped: [],
   })
+  const [horizonMods, setHorizonMods] = useState(false)
   const [showLog, setShowLog] = useState(false)
   // Знакомство: само при первом запуске, ещё раз из настроек.
   const [tour, setTour] = useState(false)
@@ -63,7 +65,11 @@ export function App() {
           progress={l.progress}
           logOpen={showLog}
           onPlay={onPlay}
-          onMods={() => setMods({ open: true, tab: "mine", dropped: [] })}
+          onMods={() =>
+            activeInstance(l.info)?.kind === "horizon"
+              ? setHorizonMods(true)
+              : setMods({ open: true, tab: "mine", dropped: [] })
+          }
           onPacks={() => setPacks((p) => ({ ...p, open: true, dropped: [] }))}
           onLog={() => setShowLog((v) => !v)}
           onSettings={() => setSettingsOpen(true)}
@@ -98,6 +104,7 @@ export function App() {
         onTabChange={(tab) => setMods((m) => ({ ...m, tab }))}
         onOpenChange={(open) => setMods((m) => ({ ...m, open, dropped: [] }))}
       />
+      <HorizonModsDialog open={horizonMods} onOpenChange={setHorizonMods} />
       <PacksDialog
         open={packs.open}
         kind={packs.kind}

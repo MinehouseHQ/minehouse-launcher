@@ -71,6 +71,9 @@ export type UserMod = {
 
 /** An optional mod of the MineHouse pack; the player turns it on or off. */
 export type PackChoice = { id: string; name: string; why?: string | null; enabled: boolean; missing: string[] }
+/** A mod built into Horizon (minehouse-horizon), on or off in the active instance. */
+export type HorizonMod = { id: string; name: string; description: string; enabled: boolean }
+
 export type ModListing = { mods: UserMod[]; pack: string[]; options: PackChoice[]; minecraft: string }
 
 export type SearchHit = {

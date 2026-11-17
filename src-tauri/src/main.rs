@@ -438,6 +438,22 @@ async fn mods_pack_option(app: State<'_, Arc<App>>, id: String, enabled: bool) -
     .map_err(err)
 }
 
+/// The mods built into Horizon and whether each is on in the active
+/// instance (empty until Horizon was installed once).
+#[tauri::command]
+async fn horizon_mods(app: State<'_, Arc<App>>) -> Res<Vec<horizon::ModSwitch>> {
+    let paths = app.paths();
+    Ok(horizon::mod_switches(&paths, &paths.game_dir()))
+}
+
+/// Turns a built-in Horizon mod on or off; the game reads it at start, so
+/// not while it runs (it would write its own list back on exit).
+#[tauri::command]
+async fn horizon_mods_toggle(app: State<'_, Arc<App>>, id: String, enabled: bool) -> Res<()> {
+    let _guard = lock_active(app.inner(), "Закройте игру, чтобы включать и выключать моды")?;
+    horizon::set_mod_enabled(&app.paths().game_dir(), &id, enabled).map_err(err)
+}
+
 #[tauri::command]
 async fn mods_remove(app: State<'_, Arc<App>>, file: String) -> Res<()> {
     let _guard = not_busy(app.inner())?;
@@ -1075,6 +1091,8 @@ fn main() {
             mods_toggle,
             mods_pack_option,
             mods_remove,
+            horizon_mods,
+            horizon_mods_toggle,
             mods_update,
             packs_list,
             packs_search,

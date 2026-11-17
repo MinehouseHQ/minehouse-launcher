@@ -77,6 +77,91 @@ pub struct BuildInfo {
     pub horizon_nightly: String,
     pub minehouse_commit: String,
     pub platform: String,
+    /// The mods built in (builds before the list have none).
+    #[serde(default)]
+    pub mods: Vec<NativeMod>,
+}
+
+/// One of the mods built into our Horizon, as `minehouse-horizon.json` lists it.
+#[derive(Clone, Debug, Deserialize, serde::Serialize, PartialEq)]
+pub struct NativeMod {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+/// A built-in mod and whether it is on in an instance.
+#[derive(Clone, Debug, serde::Serialize, PartialEq)]
+pub struct ModSwitch {
+    #[serde(flatten)]
+    pub info: NativeMod,
+    pub enabled: bool,
+}
+
+/// Where the game keeps which mods are on, in the game folder
+/// (`horizon-client-render/src/mod_list.rs`): `mod.<id>:false` turns a
+/// built-in mod off; other lines (`mod.<id>:true`, `key.<id>.<name>:...`)
+/// are the game's.
+pub const MODS_FILE: &str = "horizon-mods.txt";
+
+/// The mods of the build downloaded last, each with its switch in `game_dir`.
+/// Empty until Horizon was installed once.
+pub fn mod_switches(paths: &Paths, game_dir: &Path) -> Vec<ModSwitch> {
+    let Some(platform) = platform() else {
+        return Vec::new();
+    };
+    let zip = paths
+        .data
+        .join("horizon")
+        .join("downloads")
+        .join(format!("minehouse-horizon-{platform}.zip"));
+    let mods = read_build_info(&zip).map(|b| b.mods).unwrap_or_default();
+    let text = std::fs::read_to_string(game_dir.join(MODS_FILE)).unwrap_or_default();
+    let off = disabled(&text);
+    mods.into_iter()
+        .map(|m| ModSwitch {
+            enabled: !off.contains(&m.id),
+            info: m,
+        })
+        .collect()
+}
+
+fn disabled(text: &str) -> std::collections::BTreeSet<String> {
+    text.lines()
+        .filter_map(|l| l.split_once(':'))
+        .filter(|(_, v)| v.trim() == "false")
+        .filter_map(|(k, _)| k.trim().strip_prefix("mod."))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// `text` with mod `id` on or off, the other lines as they were.
+fn switch(text: &str, id: &str, enabled: bool) -> String {
+    let key = format!("mod.{id}");
+    let mut out: String = text
+        .lines()
+        .filter(|l| l.split_once(':').is_none_or(|(k, _)| k.trim() != key))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    if !enabled {
+        out.push_str(&format!("{key}:false\n"));
+    }
+    out
+}
+
+/// Turns a built-in mod on or off for the instance in `game_dir`; the game
+/// reads it when it starts.
+pub fn set_mod_enabled(game_dir: &Path, id: &str, enabled: bool) -> Result<()> {
+    anyhow::ensure!(
+        !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+        "Нет такого мода: {id}"
+    );
+    std::fs::create_dir_all(game_dir)?;
+    let path = game_dir.join(MODS_FILE);
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    std::fs::write(&path, switch(&text, id, enabled))
+        .with_context(|| format!("Не удалось записать {}", path.display()))
 }
 
 /// Everything [`launch`] needs.
@@ -812,6 +897,25 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mod_switches_keep_the_game_s_other_lines() {
+        let text = "mod.zoom:false\nkey.zoom.zoom:key.keyboard.c\nmod.extra:true\n";
+        assert!(disabled(text).contains("zoom"));
+        let on = switch(text, "zoom", true);
+        assert_eq!(on, "key.zoom.zoom:key.keyboard.c\nmod.extra:true\n");
+        assert!(disabled(&on).is_empty());
+        let off = switch(&on, "minimap", false);
+        assert!(off.ends_with("mod.minimap:false\n") && off.contains("key.zoom.zoom"));
+        assert_eq!(disabled(&off).into_iter().collect::<Vec<_>>(), ["minimap"]);
+        // Old builds list no mods.
+        let b: BuildInfo = serde_json::from_str(
+            r#"{"horizon_revision":"a","horizon_nightly":"b","minehouse_commit":"c","platform":"d"}"#,
+        )
+        .unwrap();
+        assert!(b.mods.is_empty());
+    }
+
     use super::*;
 
     /// The `nightly` release of 2026-11-13 (commit 9f42064), signed.
@@ -890,6 +994,7 @@ aa9bf9383ae4e926d5f9c2ca8be997e843a6cf590fc3c8c04162a26718adeabd  horizon-source
                 horizon_nightly: "nightly-2026-11-13-9f42064".into(),
                 minehouse_commit: "abc".into(),
                 platform: "linux-x86_64".into(),
+                mods: Vec::new(),
             },
             server: "play.minehouse.pro".into(),
         };
