@@ -450,7 +450,10 @@ async fn horizon_mods(app: State<'_, Arc<App>>) -> Res<Vec<horizon::ModSwitch>> 
 /// not while it runs (it would write its own list back on exit).
 #[tauri::command]
 async fn horizon_mods_toggle(app: State<'_, Arc<App>>, id: String, enabled: bool) -> Res<()> {
-    let _guard = lock_active(app.inner(), "Закройте игру, чтобы включать и выключать моды")?;
+    let _guard = lock_active(
+        app.inner(),
+        "Закройте игру, чтобы включать и выключать моды",
+    )?;
     horizon::set_mod_enabled(&app.paths().game_dir(), &id, enabled).map_err(err)
 }
 

@@ -154,7 +154,10 @@ fn switch(text: &str, id: &str, enabled: bool) -> String {
 /// reads it when it starts.
 pub fn set_mod_enabled(game_dir: &Path, id: &str, enabled: bool) -> Result<()> {
     anyhow::ensure!(
-        !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+        !id.is_empty()
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
         "Нет такого мода: {id}"
     );
     std::fs::create_dir_all(game_dir)?;
