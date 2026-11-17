@@ -79,7 +79,13 @@ export function BottomBar({
       </div>
 
       <div className="flex items-center gap-2">
-        {/* В Horizon моды Fabric, ресурспаки и шейдеры лаунчера не работают. */}
+        {/* В Horizon моды Fabric, ресурспаки и шейдеры лаунчера не работают: только его встроенные моды. */}
+        {horizon && (
+          <Button variant="outline" size="lg" onClick={onMods}>
+            <Package />
+            Моды
+          </Button>
+        )}
         {!horizon && (
           <>
             <Button variant="outline" size="lg" onClick={onMods}>
