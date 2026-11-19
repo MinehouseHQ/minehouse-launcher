@@ -220,7 +220,8 @@ pub async fn install(paths: &Paths, reporter: &Reporter) -> Result<Installed> {
         reporter.log("Horizon уже установлен");
     } else {
         reporter.stage("Скачиваем Horizon");
-        let archive = fetch_nightly(&client, &build, platform, &downloads, reporter).await?;
+        let archive =
+            fetch_nightly(&client, &build, platform, &downloads, &builds, reporter).await?;
         reporter.stage("Распаковываем Horizon");
         let (archive, zip, dir, builds, sha) = (
             archive,
@@ -325,54 +326,56 @@ fn marker_matches(dir: &Path, sha: &str) -> bool {
         .is_some_and(|s| s.eq_ignore_ascii_case(sha))
 }
 
-/// Horizon's archive for the Nightly our build was made from. Dated Nightlies
-/// are not always published as their own release; then the moving `nightly`
-/// release is used, but only while it is still on that commit.
+/// Where the Horizon files for our build come from.
+#[derive(Debug, PartialEq)]
+enum NightlyFiles {
+    /// Horizon's archive, checked against its signed `SHA256SUMS`.
+    Archive(PathBuf),
+    /// An unpacked build of the same Horizon commit installed earlier.
+    Folder(PathBuf),
+}
+
+/// Our release's own build of Horizon's files for the commit `rev`
+/// (`horizon-<rev12>-horizon-<platform>.zip`): Nightlies are deleted after a few
+/// days, so each MineHouse release carries the files it was built against.
+fn mirror_name(rev: &str, name: &str) -> String {
+    format!("horizon-{}-{name}", short(rev))
+}
+
+/// Horizon's files for the Nightly our build was made from: our release's build
+/// of them, the dated Nightly, or the moving `nightly` while it is still on that
+/// commit. When none of them is online any more (a dated Nightly is deleted
+/// after a few days), what this computer downloaded or unpacked for that commit
+/// earlier.
 async fn fetch_nightly(
     client: &reqwest::Client,
     build: &BuildInfo,
     platform: &str,
     downloads: &Path,
+    builds: &Path,
     reporter: &Reporter,
-) -> Result<PathBuf> {
+) -> Result<NightlyFiles> {
     let archive = archive_name(platform);
-    let mut sums = None;
-    let mut missing = None;
-    for tag in [build.horizon_nightly.as_str(), "nightly"] {
-        let base = format!("{RELEASES}/{tag}");
-        let list = match get_bytes(client, &format!("{base}/SHA256SUMS")).await {
-            Ok(list) => list,
-            Err(e) => {
-                missing = Some(e);
-                continue;
-            }
-        };
-        if tag == "nightly" {
-            let head = nightly_revision(client).await?;
-            anyhow::ensure!(
-                head == build.horizon_revision,
-                "Horizon {} уже удалён с GitHub, а сборки MineHouse под новую Nightly ещё нет. \
-                 Попробуйте позже или выберите обычную сборку",
-                build.horizon_nightly
-            );
-        }
-        let sig = get_bytes(client, &format!("{base}/SHA256SUMS.sig")).await?;
-        verify_sums(tag, &list, &sig)?;
-        sums = Some((base, String::from_utf8(list)?));
-        break;
-    }
-    let Some((base, sums)) = sums else {
-        let e = missing.unwrap_or_else(|| anyhow::anyhow!("нет SHA256SUMS"));
-        return Err(e.context(format!("Нет выпуска Horizon {}", build.horizon_nightly)));
-    };
-    let sha =
-        find_sum(&sums, &archive).with_context(|| format!("В выпуске Horizon нет {archive}"))?;
     let path = downloads.join(format!("{}-{archive}", short(&build.horizon_revision)));
-    reporter.log(format!("{base}/{archive}"));
+    let online = match find_nightly(client, build, &archive).await {
+        Ok(found) => found,
+        Err(e) => {
+            if let Some(local) = local_nightly(build, &path, builds) {
+                reporter.log(format!(
+                    "{e:#}; берём файлы Horizon {}, скачанные раньше",
+                    build.horizon_nightly
+                ));
+                return Ok(local);
+            }
+            return Err(e);
+        }
+    };
+    let (url, sha) = online;
+    reporter.log(url.clone());
     http::fetch_all(
         client,
         vec![Download {
-            url: format!("{base}/{archive}"),
+            url,
             path: path.clone(),
             hash: Hash::Sha256(sha),
             size: None,
@@ -382,7 +385,78 @@ async fn fetch_nightly(
         reporter,
     )
     .await?;
-    Ok(path)
+    Ok(NightlyFiles::Archive(path))
+}
+
+/// The URL of Horizon's archive for our build and its SHA-256: from our own
+/// release's `SHA256SUMS` (CI builds Horizon's files for the pinned commit and
+/// publishes them beside our zip), else from Horizon's signed Nightly.
+async fn find_nightly(
+    client: &reqwest::Client,
+    build: &BuildInfo,
+    archive: &str,
+) -> Result<(String, String)> {
+    let rev = &build.horizon_revision;
+    let ours = std::env::var("MINEHOUSE_HORIZON_URL").unwrap_or_else(|_| BUILDS.into());
+    let ours = ours.trim_end_matches('/');
+    let mirrored = mirror_name(rev, archive);
+    if let Ok(sums) = get_text(client, &format!("{ours}/SHA256SUMS")).await {
+        if let Some(sha) = find_sum(&sums, &mirrored) {
+            return Ok((format!("{ours}/{mirrored}"), sha));
+        }
+    }
+    let mut missing = None;
+    for tag in [build.horizon_nightly.as_str(), "nightly"] {
+        let base = format!("{RELEASES}/{tag}");
+        let list = match get_bytes(client, &format!("{base}/SHA256SUMS")).await {
+            Ok(list) => list,
+            Err(e) => {
+                missing.get_or_insert(e);
+                continue;
+            }
+        };
+        if tag == "nightly" {
+            let head = nightly_revision(client).await?;
+            anyhow::ensure!(
+                head == *rev,
+                "Horizon {} уже удалён с GitHub, а сборки MineHouse под новую Nightly ещё нет. \
+                 Попробуйте позже или выберите обычную сборку",
+                build.horizon_nightly
+            );
+        }
+        let sig = get_bytes(client, &format!("{base}/SHA256SUMS.sig")).await?;
+        verify_sums(tag, &list, &sig)?;
+        let sums = String::from_utf8(list)?;
+        let sha =
+            find_sum(&sums, archive).with_context(|| format!("В выпуске Horizon нет {archive}"))?;
+        return Ok((format!("{base}/{archive}"), sha));
+    }
+    let e = missing.unwrap_or_else(|| anyhow::anyhow!("нет SHA256SUMS"));
+    Err(e.context(format!("Нет выпуска Horizon {}", build.horizon_nightly)))
+}
+
+/// Horizon's files for `build`'s commit already on this computer: the archive
+/// downloaded (and checked) for it, else a build folder unpacked from it.
+fn local_nightly(build: &BuildInfo, archive: &Path, builds: &Path) -> Option<NightlyFiles> {
+    if archive.is_file() {
+        return Some(NightlyFiles::Archive(archive.to_path_buf()));
+    }
+    let prefix = format!("{}-", build.horizon_nightly);
+    let prepare = format!("horizon-prepare{EXE}");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(builds)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with(&prefix))
+                && p.join(MARKER).is_file()
+                && p.join(&prepare).is_file()
+        })
+        .collect();
+    found.sort();
+    found.pop().map(NightlyFiles::Folder)
 }
 
 /// The commit `refs/tags/nightly` points at, from the smart-HTTP ref list.
@@ -457,10 +531,11 @@ fn find_sum(sums: &str, name: &str) -> Option<String> {
     })
 }
 
-/// Unpacks the Nightly into `dir`, puts our `horizon-client` in place of its
-/// own and writes the marker last, so a half-done folder is never used.
+/// Unpacks the Nightly (or copies a build folder of the same commit) into
+/// `dir`, puts our `horizon-client` in place of its own and writes the marker
+/// last, so a half-done folder is never used.
 fn unpack_build(
-    archive: &Path,
+    archive: &NightlyFiles,
     ours: &Path,
     builds: &Path,
     dir: &Path,
@@ -471,15 +546,21 @@ fn unpack_build(
     let tmp = builds.join(".unpacking");
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp)?;
-    let file = std::fs::File::open(archive)?;
-    if archive.extension().is_some_and(|e| e == "zip") {
-        zip::ZipArchive::new(file)?
-            .extract(&tmp)
-            .context("Не удалось распаковать Horizon")?;
-    } else {
-        tar::Archive::new(flate2::read::GzDecoder::new(file))
-            .unpack(&tmp)
-            .context("Не удалось распаковать Horizon")?;
+    match archive {
+        NightlyFiles::Archive(archive) => {
+            let file = std::fs::File::open(archive)?;
+            if archive.extension().is_some_and(|e| e == "zip") {
+                zip::ZipArchive::new(file)?
+                    .extract(&tmp)
+                    .context("Не удалось распаковать Horizon")?;
+            } else {
+                tar::Archive::new(flate2::read::GzDecoder::new(file))
+                    .unpack(&tmp)
+                    .context("Не удалось распаковать Horizon")?;
+            }
+        }
+        NightlyFiles::Folder(from) => copy_dir(from, &tmp.join(format!("horizon-{platform}")))
+            .context("Не удалось скопировать Horizon")?,
     }
     // The archive holds one folder, `horizon-<platform>/`.
     let inner = tmp.join(format!("horizon-{platform}"));
@@ -540,6 +621,22 @@ fn unpack_build(
         dir.join(MARKER),
         serde_json::to_vec_pretty(&serde_json::json!({ "zip_sha256": zip_sha }))?,
     )?;
+    Ok(())
+}
+
+/// Copies a build folder, all but its marker.
+fn copy_dir(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            copy_dir(&src, &dst)?;
+        } else if entry.file_name() != MARKER {
+            std::fs::copy(&src, &dst)?;
+        }
+    }
     Ok(())
 }
 
@@ -900,6 +997,90 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    fn build_info() -> super::BuildInfo {
+        super::BuildInfo {
+            horizon_revision: "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0".into(),
+            horizon_nightly: "nightly-2026-11-13-9f42064".into(),
+            minehouse_commit: "56e8bed".into(),
+            platform: "linux-x86_64".into(),
+            mods: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_deleted_nightly_falls_back_to_what_was_downloaded_or_unpacked() {
+        use super::{local_nightly, NightlyFiles, EXE, MARKER};
+        let tmp = tempfile::tempdir().unwrap();
+        let (downloads, builds) = (tmp.path().join("downloads"), tmp.path().join("builds"));
+        std::fs::create_dir_all(&downloads).unwrap();
+        let archive = downloads.join("9f42064c11ef-horizon-linux-x86_64.tar.gz");
+        let build = build_info();
+        assert_eq!(local_nightly(&build, &archive, &builds), None);
+        // An unpacked build of another Nightly is no use; one of this Nightly is.
+        for name in [
+            "nightly-2026-11-10-1234567-aaaa",
+            "nightly-2026-11-13-9f42064-1c8ef0c",
+        ] {
+            let dir = builds.join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(MARKER), "{}").unwrap();
+            std::fs::write(dir.join(format!("horizon-prepare{EXE}")), "").unwrap();
+        }
+        assert_eq!(
+            local_nightly(&build, &archive, &builds),
+            Some(NightlyFiles::Folder(
+                builds.join("nightly-2026-11-13-9f42064-1c8ef0c")
+            ))
+        );
+        std::fs::write(&archive, "").unwrap();
+        assert_eq!(
+            local_nightly(&build, &archive, &builds),
+            Some(NightlyFiles::Archive(archive))
+        );
+    }
+
+    #[test]
+    fn a_build_folder_is_copied_with_our_client_and_a_new_marker() {
+        use super::{unpack_build, NightlyFiles, EXE, MARKER};
+        use std::io::Write;
+        let tmp = tempfile::tempdir().unwrap();
+        let builds = tmp.path().join("builds");
+        let old = builds.join("nightly-old");
+        std::fs::create_dir_all(old.join("exporters")).unwrap();
+        std::fs::write(old.join("exporters/manifest.json"), "{}").unwrap();
+        std::fs::write(old.join(format!("horizon-client{EXE}")), "old").unwrap();
+        std::fs::write(old.join(MARKER), r#"{"zip_sha256":"old"}"#).unwrap();
+        let ours = tmp.path().join("ours.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&ours).unwrap());
+        zip.start_file(
+            format!("horizon-client{EXE}"),
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(b"new").unwrap();
+        zip.finish().unwrap();
+        let dir = builds.join("nightly-new");
+        unpack_build(
+            &NightlyFiles::Folder(old.clone()),
+            &ours,
+            &builds,
+            &dir,
+            "linux-x86_64",
+            "abc",
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join(format!("horizon-client{EXE}"))).unwrap(),
+            "new"
+        );
+        assert!(dir.join("exporters/manifest.json").is_file());
+        assert!(super::marker_matches(&dir, "abc"));
+        assert!(
+            super::marker_matches(&old, "old"),
+            "the old build stays as it was"
+        );
+    }
 
     #[test]
     fn mod_switches_keep_the_game_s_other_lines() {
