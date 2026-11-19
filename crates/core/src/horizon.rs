@@ -335,14 +335,14 @@ enum NightlyFiles {
     Folder(PathBuf),
 }
 
-/// Our release's copy of Horizon's files for the commit `rev`: Nightlies are
-/// deleted after a few days, so each MineHouse release carries the ones it was
-/// built against, under names of their own (`horizon-<rev12>-…`).
+/// Our release's own build of Horizon's files for the commit `rev`
+/// (`horizon-<rev12>-horizon-<platform>.zip`): Nightlies are deleted after a few
+/// days, so each MineHouse release carries the files it was built against.
 fn mirror_name(rev: &str, name: &str) -> String {
     format!("horizon-{}-{name}", short(rev))
 }
 
-/// Horizon's files for the Nightly our build was made from: our release's copy
+/// Horizon's files for the Nightly our build was made from: our release's build
 /// of them, the dated Nightly, or the moving `nightly` while it is still on that
 /// commit. When none of them is online any more (a dated Nightly is deleted
 /// after a few days), what this computer downloaded or unpacked for that commit
@@ -388,7 +388,9 @@ async fn fetch_nightly(
     Ok(NightlyFiles::Archive(path))
 }
 
-/// The URL of Horizon's archive for our build and its signed SHA-256.
+/// The URL of Horizon's archive for our build and its SHA-256: from our own
+/// release's `SHA256SUMS` (CI builds Horizon's files for the pinned commit and
+/// publishes them beside our zip), else from Horizon's signed Nightly.
 async fn find_nightly(
     client: &reqwest::Client,
     build: &BuildInfo,
@@ -397,32 +399,23 @@ async fn find_nightly(
     let rev = &build.horizon_revision;
     let ours = std::env::var("MINEHOUSE_HORIZON_URL").unwrap_or_else(|_| BUILDS.into());
     let ours = ours.trim_end_matches('/');
-    // (where the list is, where its signature is, where the archive is, tag)
-    let mut places = vec![(
-        format!("{ours}/{}", mirror_name(rev, "SHA256SUMS")),
-        format!("{ours}/{}", mirror_name(rev, "SHA256SUMS.sig")),
-        format!("{ours}/{}", mirror_name(rev, archive)),
-        "nightly",
-    )];
-    for tag in [build.horizon_nightly.as_str(), "nightly"] {
-        let base = format!("{RELEASES}/{tag}");
-        places.push((
-            format!("{base}/SHA256SUMS"),
-            format!("{base}/SHA256SUMS.sig"),
-            format!("{base}/{archive}"),
-            tag,
-        ));
+    let mirrored = mirror_name(rev, archive);
+    if let Ok(sums) = get_text(client, &format!("{ours}/SHA256SUMS")).await {
+        if let Some(sha) = find_sum(&sums, &mirrored) {
+            return Ok((format!("{ours}/{mirrored}"), sha));
+        }
     }
     let mut missing = None;
-    for (list_url, sig_url, archive_url, tag) in places {
-        let list = match get_bytes(client, &list_url).await {
+    for tag in [build.horizon_nightly.as_str(), "nightly"] {
+        let base = format!("{RELEASES}/{tag}");
+        let list = match get_bytes(client, &format!("{base}/SHA256SUMS")).await {
             Ok(list) => list,
             Err(e) => {
                 missing.get_or_insert(e);
                 continue;
             }
         };
-        if archive_url.starts_with(RELEASES) && tag == "nightly" {
+        if tag == "nightly" {
             let head = nightly_revision(client).await?;
             anyhow::ensure!(
                 head == *rev,
@@ -431,12 +424,12 @@ async fn find_nightly(
                 build.horizon_nightly
             );
         }
-        let sig = get_bytes(client, &sig_url).await?;
+        let sig = get_bytes(client, &format!("{base}/SHA256SUMS.sig")).await?;
         verify_sums(tag, &list, &sig)?;
         let sums = String::from_utf8(list)?;
         let sha =
             find_sum(&sums, archive).with_context(|| format!("В выпуске Horizon нет {archive}"))?;
-        return Ok((archive_url, sha));
+        return Ok((format!("{base}/{archive}"), sha));
     }
     let e = missing.unwrap_or_else(|| anyhow::anyhow!("нет SHA256SUMS"));
     Err(e.context(format!("Нет выпуска Horizon {}", build.horizon_nightly)))
