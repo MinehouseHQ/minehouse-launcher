@@ -26,7 +26,7 @@ pub mod settings;
 pub mod user_mods;
 
 /// Where the launcher reads the modpack manifest from (built by
-/// `modpack/scripts/build.mjs` in minehouse/minehouse-landing).
+/// `modpack/scripts/build.mjs` in MinehouseHQ/minehouse-landing).
 pub const SITE: &str = "https://www.minehouse.pro";
 pub const MANIFEST_URL: &str = "https://www.minehouse.pro/modpack/manifest.json";
 /// Address with an explicit port: on the Pyro node's IP, port 25565 belongs to

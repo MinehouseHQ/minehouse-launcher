@@ -68,7 +68,7 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIxRkE3NTY3NDg1REE3NUYKUldSZnAxMUlaM1g2SVoxVndQaTNwSEh3NkN6SDZkRjcrek45QjVBUjFyRlZUeU13T3MzYlZTNncK",
       "endpoints": [
         "https://github.com/P5ina/minehouse-launcher/releases/latest/download/latest.json",
-        "https://github.com/minehouse/minehouse-launcher/releases/latest/download/latest.json"
+        "https://github.com/MinehouseHQ/minehouse-launcher/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

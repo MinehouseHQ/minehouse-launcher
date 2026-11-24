@@ -47,8 +47,8 @@
   <launchable type="desktop-id">pro.minehouse.launcher.desktop</launchable>
 
   <url type="homepage">https://www.minehouse.pro</url>
-  <url type="bugtracker">https://github.com/minehouse/minehouse-launcher/issues</url>
-  <url type="vcs-browser">https://github.com/minehouse/minehouse-launcher</url>
+  <url type="bugtracker">https://github.com/MinehouseHQ/minehouse-launcher/issues</url>
+  <url type="vcs-browser">https://github.com/MinehouseHQ/minehouse-launcher</url>
   <url type="contact">https://discord.gg/gCYGxDzaCb</url>
 
   <categories>
