@@ -53,7 +53,7 @@ jobs:
         run: |
           flatpak/publish.sh "$RUNNER_TEMP/minehouse.deb" "${{ steps.v.outputs.version }}" \
             "${{ steps.gpg.outputs.id }}" \
-            "https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}" \
+            "https://launcher.minehouse.pro" \
             site
       - name: Attach bundle to the release
         env:

@@ -47,8 +47,8 @@
   <launchable type="desktop-id">pro.minehouse.launcher.desktop</launchable>
 
   <url type="homepage">https://www.minehouse.pro</url>
-  <url type="bugtracker">https://github.com/P5ina/minehouse-launcher/issues</url>
-  <url type="vcs-browser">https://github.com/P5ina/minehouse-launcher</url>
+  <url type="bugtracker">https://github.com/minehouse/minehouse-launcher/issues</url>
+  <url type="vcs-browser">https://github.com/minehouse/minehouse-launcher</url>
   <url type="contact">https://discord.gg/gCYGxDzaCb</url>
 
   <categories>
@@ -69,15 +69,15 @@
   <screenshots>
     <screenshot type="default">
       <caption>Home screen with the server status</caption>
-      <image>https://raw.githubusercontent.com/P5ina/minehouse-launcher/v0.3.1/docs/screenshots/home.png</image>
+      <image>https://raw.githubusercontent.com/minehouse/minehouse-launcher/v0.3.1/docs/screenshots/home.png</image>
     </screenshot>
     <screenshot>
       <caption>Installing mods from Modrinth</caption>
-      <image>https://raw.githubusercontent.com/P5ina/minehouse-launcher/v0.3.1/docs/screenshots/mods-find.png</image>
+      <image>https://raw.githubusercontent.com/minehouse/minehouse-launcher/v0.3.1/docs/screenshots/mods-find.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings</caption>
-      <image>https://raw.githubusercontent.com/P5ina/minehouse-launcher/v0.3.1/docs/screenshots/settings.png</image>
+      <image>https://raw.githubusercontent.com/minehouse/minehouse-launcher/v0.3.1/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
 

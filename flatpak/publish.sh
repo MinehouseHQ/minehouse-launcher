@@ -35,8 +35,11 @@ flatpak-builder --user --force-clean --disable-rofiles-fuse \
   --repo="$out/repo" \
   "$work/build" "$work/$app.yml"
 
+# --redirect-url: clients installed from an older address (p5ina.github.io)
+# switch their remote to $site on the next `flatpak update`.
 flatpak build-update-repo \
   --title="MineHouse" \
+  --redirect-url="$site/repo/" \
   --default-branch=stable \
   --gpg-sign="$key" \
   --generate-static-deltas \

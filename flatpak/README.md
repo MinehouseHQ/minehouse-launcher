@@ -6,7 +6,7 @@ App ID `pro.minehouse.launcher` (совпадает с `identifier` в `tauri.co
 Установка для игроков:
 
 ```sh
-flatpak install --user https://p5ina.github.io/minehouse-launcher/pro.minehouse.launcher.flatpakref
+flatpak install --user https://launcher.minehouse.pro/pro.minehouse.launcher.flatpakref
 flatpak update   # обновления
 ```
 
@@ -26,7 +26,7 @@ flatpak update   # обновления
 
 1. Секрет `FLATPAK_GPG_PRIVATE_KEY`: приватный ключ к `minehouse-flatpak.asc` (ASCII armor, без пароля).
    Если ключ потерян, новый ключ = игрокам придётся переустановить remote.
-2. Settings → Pages → Source: **GitHub Actions**.
+2. Settings → Pages → Source: **GitHub Actions**, Custom domain: `launcher.minehouse.pro` (CNAME в DNS на `<владелец>.github.io`).
 3. Первую публикацию без нового релиза: Actions → Flatpak → Run workflow.
 
 ## Новая версия

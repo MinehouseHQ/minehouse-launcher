@@ -73,7 +73,7 @@ Minecraft, Fabric и сборки MineHouse, запуск сразу на `play.
 Тип сборки «Horizon (лёгкая)» (`horizon.rs`) запускает
 [Horizon](https://github.com/horizon-rust/horizon), Minecraft 26.3 на Rust, с
 нативными модами MineHouse (голосовой чат Plasmo Voice, Ping Wheel) из
-[P5ina/minehouse-horizon](https://github.com/P5ina/minehouse-horizon). Шаги как в
+[minehouse/minehouse-horizon](https://github.com/minehouse/minehouse-horizon). Шаги как в
 `docs/api/launch-guide.md` Horizon:
 
 1. `minehouse-horizon-<платформа>.zip` из последнего релиза minehouse-horizon
