@@ -1,6 +1,6 @@
 //! «Horizon (лёгкая)»: Minecraft 26.3 rewritten in Rust
 //! (<https://github.com/horizon-rust/horizon>) with MineHouse's native mods
-//! (voice chat, ping wheel) compiled in by minehouse/minehouse-horizon's CI.
+//! (voice chat, ping wheel) compiled in by MinehouseHQ/minehouse-horizon's CI.
 //!
 //! Installing follows Horizon's launch guide (`docs/api/launch-guide.md`):
 //!
@@ -32,9 +32,7 @@ use crate::rules::Env;
 
 /// Where the MineHouse builds of Horizon are published (a `v*` tag there
 /// makes a release). `MINEHOUSE_HORIZON_URL` points elsewhere, e.g. a mirror.
-/// The repo lives in the minehouse org; the old P5ina path redirects there, so
-/// switch to `minehouse/minehouse-horizon` once the transfer is done.
-pub const BUILDS: &str = "https://github.com/P5ina/minehouse-horizon/releases/latest/download";
+pub const BUILDS: &str = "https://github.com/MinehouseHQ/minehouse-horizon/releases/latest/download";
 /// Horizon's own releases: `<RELEASES>/<tag>/<archive>`.
 pub const RELEASES: &str = "https://github.com/horizon-rust/horizon/releases/download";
 /// Its refs, to see which commit the moving `nightly` tag is on.
