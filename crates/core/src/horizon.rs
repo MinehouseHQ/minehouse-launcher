@@ -32,7 +32,9 @@ use crate::rules::Env;
 
 /// Where the MineHouse builds of Horizon are published (a `v*` tag there
 /// makes a release). `MINEHOUSE_HORIZON_URL` points elsewhere, e.g. a mirror.
-pub const BUILDS: &str = "https://github.com/minehouse/minehouse-horizon/releases/latest/download";
+/// The repo lives in the minehouse org; the old P5ina path redirects there, so
+/// switch to `minehouse/minehouse-horizon` once the transfer is done.
+pub const BUILDS: &str = "https://github.com/P5ina/minehouse-horizon/releases/latest/download";
 /// Horizon's own releases: `<RELEASES>/<tag>/<archive>`.
 pub const RELEASES: &str = "https://github.com/horizon-rust/horizon/releases/download";
 /// Its refs, to see which commit the moving `nightly` tag is on.
