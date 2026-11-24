@@ -32,7 +32,8 @@ use crate::rules::Env;
 
 /// Where the MineHouse builds of Horizon are published (a `v*` tag there
 /// makes a release). `MINEHOUSE_HORIZON_URL` points elsewhere, e.g. a mirror.
-pub const BUILDS: &str = "https://github.com/MinehouseHQ/minehouse-horizon/releases/latest/download";
+pub const BUILDS: &str =
+    "https://github.com/MinehouseHQ/minehouse-horizon/releases/latest/download";
 /// Horizon's own releases: `<RELEASES>/<tag>/<archive>`.
 pub const RELEASES: &str = "https://github.com/horizon-rust/horizon/releases/download";
 /// Its refs, to see which commit the moving `nightly` tag is on.
