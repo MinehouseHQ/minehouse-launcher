@@ -522,6 +522,8 @@ struct PacksListing {
     packs: Vec<packs::ContentPack>,
     minecraft: String,
     iris: IrisState,
+    /// The game of this instance is running: switches apply on its next start.
+    playing: bool,
 }
 
 fn kind(s: &str) -> Res<Kind> {
@@ -536,6 +538,7 @@ async fn packs_list(app: State<'_, Arc<App>>, kind: String) -> Res<PacksListing>
         packs: packs::list(&app.paths(), kind).map_err(err)?,
         minecraft: pack.minecraft.clone(),
         iris: iris_state(&pack),
+        playing: active_playing(app.inner()),
     })
 }
 
@@ -584,12 +587,20 @@ async fn packs_search(
     })
 }
 
-/// The game reads these files only at start; while it runs, its own screens own them.
-fn not_playing(app: &Arc<App>) -> Res<InstanceLock> {
-    lock_active(
-        app,
-        "Закройте игру этой сборки: пока она запущена, паки меняются в её настройках",
-    )
+/// Packs can change while the game runs, like in Prism: new files show up in
+/// the game's own pack screens, and what is turned on is picked up on the
+/// next start. Only a data folder move stops it.
+fn packs_unlocked(app: &Arc<App>) -> Res<()> {
+    if app.runs.lock().unwrap().moving {
+        return Err("Подождите, папка игры переносится".into());
+    }
+    Ok(())
+}
+
+/// Whether the selected instance's game is running now.
+fn active_playing(app: &Arc<App>) -> bool {
+    let id = app.config().active().id.clone();
+    app.runs.lock().unwrap().running.contains_key(&id)
 }
 
 #[tauri::command]
@@ -600,7 +611,7 @@ async fn packs_install(
     icon: Option<String>,
 ) -> Res<String> {
     let kind = self::kind(&kind)?;
-    let _guard = not_playing(app.inner())?;
+    packs_unlocked(app.inner())?;
     let pack = app.pack(false).await?;
     packs::install_modrinth(
         &app.client,
@@ -623,7 +634,7 @@ struct Added {
 
 #[tauri::command]
 async fn packs_add_files(app: State<'_, Arc<App>>, files: Vec<String>) -> Res<Added> {
-    let _guard = not_playing(app.inner())?;
+    packs_unlocked(app.inner())?;
     let mut out = Added {
         lines: Vec::new(),
         kind: None,
@@ -681,27 +692,27 @@ async fn packs_toggle(
     enabled: bool,
 ) -> Res<()> {
     let kind = self::kind(&kind)?;
-    let _guard = not_playing(app.inner())?;
+    packs_unlocked(app.inner())?;
     packs::set_enabled(&app.paths(), kind, &file, enabled).map_err(err)
 }
 
 #[tauri::command]
 async fn packs_move(app: State<'_, Arc<App>>, file: String, up: bool) -> Res<()> {
-    let _guard = not_playing(app.inner())?;
+    packs_unlocked(app.inner())?;
     packs::move_resource_pack(&app.paths(), &file, up).map_err(err)
 }
 
 #[tauri::command]
 async fn packs_remove(app: State<'_, Arc<App>>, kind: String, file: String) -> Res<()> {
     let kind = self::kind(&kind)?;
-    let _guard = not_playing(app.inner())?;
+    packs_unlocked(app.inner())?;
     packs::remove(&app.paths(), kind, &file).map_err(err)
 }
 
 #[tauri::command]
 async fn packs_update(app: State<'_, Arc<App>>, kind: String) -> Res<Vec<String>> {
     let kind = self::kind(&kind)?;
-    let _guard = not_playing(app.inner())?;
+    packs_unlocked(app.inner())?;
     let pack = app.pack(false).await?;
     packs::update_all(&app.client, &app.paths(), kind, &pack.minecraft)
         .await
