@@ -3,14 +3,19 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import {
   ArrowLeft,
   ArrowRight,
+  Blocks,
   Check,
   Copy,
+  Download,
   ExternalLink,
+  Feather,
   FolderInput,
   Layers,
   Loader2,
   MessageCircle,
+  Package,
   Play,
+  Puzzle,
   UserRound,
 } from "lucide-react"
 
@@ -20,15 +25,24 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useDeviceLogin } from "@/hooks/use-device-login"
-import { activeInstance, invoke, LINKS, openUrl, type Info } from "@/lib/api"
+import { activeInstance, invoke, LINKS, openUrl, type Info, type ModListing } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 import { DataDirField, useMoveDataDir } from "./data-dir"
 
-type StepId = "welcome" | "folder" | "instance" | "account" | "discord" | "done"
+type StepId = "welcome" | "way" | "folder" | "instance" | "mod" | "account" | "discord" | "done"
+
+/**
+ * Как игрок хочет играть, как на сайте в /start: полная сборка, почти ваниль
+ * (только обязательные моды), Horizon, или вообще не через лаунчер (своя
+ * сборка или ванильный Minecraft) — тогда просим поставить наш мод.
+ */
+type Way = "full" | "light" | "horizon" | "external"
 
 const LABELS: Record<StepId, string> = {
   welcome: "Привет",
+  way: "Способ",
+  mod: "Мод MineHouse",
   folder: "Папка",
   instance: "Сборка",
   account: "Microsoft",
@@ -58,19 +72,30 @@ export function Onboarding({
   onPlay: () => void
 }) {
   const reduced = useReducedMotion()
-  const steps: StepId[] = [
-    "welcome",
-    ...(info.can_move_data ? (["folder"] as const) : []),
-    "instance",
-    "account",
-    "discord",
-    "done",
-  ]
+  const instance = activeInstance(info)
+  const [way, setWay] = useState<Way>(instance?.kind === "horizon" ? "horizon" : "full")
+  const steps: StepId[] =
+    way === "external"
+      ? ["welcome", "way", "mod", "discord", "done"]
+      : [
+          "welcome",
+          "way",
+          ...(info.can_move_data ? (["folder"] as const) : []),
+          "instance",
+          "account",
+          "discord",
+          "done",
+        ]
   const [index, setIndex] = useState(0)
   const step = steps[index]
   const [dir, setDir] = useState(info.data_dir)
-  const instance = activeInstance(info)
   const [name, setName] = useState(instance?.name ?? "MineHouse")
+  const pickWay = (next: Way) => {
+    setWay(next)
+    // Своё название сборки игрок мог уже ввести; подставляем только стандартные.
+    if (next === "horizon" && name === "MineHouse") setName("Horizon")
+    if (next !== "horizon" && name === "Horizon") setName(instance?.name ?? "MineHouse")
+  }
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const mover = useMoveDataDir()
@@ -96,10 +121,23 @@ export function Onboarding({
       if (!(await mover.move(dir))) return
       await onChanged()
     }
-    if (step === "instance" && instance && name.trim() !== instance.name) {
+    if (step === "instance" && instance) {
       setBusy(true)
       try {
-        await invoke("instance_rename", { id: instance.id, name })
+        if (way === "horizon" && instance.kind !== "horizon") {
+          // Тип у сборки не меняется: заводим новую сборку Horizon, она станет активной.
+          await invoke("instance_create", { name, kind: "horizon" })
+        } else if (name.trim() !== instance.name) {
+          await invoke("instance_rename", { id: instance.id, name })
+        }
+        if (way === "light") {
+          // Почти ваниль: выключаем всё необязательное из сборки, остаются
+          // наш мод, голосовой чат, пинги и библиотеки.
+          const listing = await invoke<ModListing>("mods_list")
+          for (const o of listing.options.filter((o) => o.enabled)) {
+            await invoke("mods_pack_option", { id: o.id, enabled: false })
+          }
+        }
         await onChanged()
       } catch (e) {
         setError(String(e))
@@ -162,6 +200,95 @@ export function Onboarding({
                     можно играть.
                   </p>
                 </div>
+              </>
+            )}
+
+            {step === "way" && (
+              <>
+                <Title icon={<Layers />} title="Как будете играть?">
+                  Наш мод MineHouse ставится во все сборки лаунчера сам. Играете через другой лаунчер? Тоже можно.
+                </Title>
+                <div role="radiogroup" aria-label="Как играть" className="grid gap-2">
+                  <WayChoice
+                    active={way === "full"}
+                    onClick={() => pickWay("full")}
+                    icon={<Package />}
+                    title="Сборка MineHouse"
+                    badge="Советуем"
+                    text="Голосовой чат, пинги, эмоции, миникарта, оптимизация и шейдеры по желанию. Лишнее можно выключить потом в «Модах»."
+                  />
+                  <WayChoice
+                    active={way === "light"}
+                    onClick={() => pickWay("light")}
+                    icon={<Feather />}
+                    title="Почти ванильный Minecraft"
+                    text="Только нужное для сервера: наш мод, голосовой чат и пинги. Свои моды Fabric можно добавить в «Модах»."
+                  />
+                  {info.horizon_supported && (
+                    <WayChoice
+                      active={way === "horizon"}
+                      onClick={() => pickWay("horizon")}
+                      icon={<Blocks />}
+                      title="Horizon (лёгкая)"
+                      text="Minecraft, переписанный на Rust: быстрее на слабых компьютерах. Голосовой чат и метки есть, моды Fabric и шейдеры не ставятся."
+                    />
+                  )}
+                  <WayChoice
+                    active={way === "external"}
+                    onClick={() => pickWay("external")}
+                    icon={<Puzzle />}
+                    title="Своя сборка или ванильный Minecraft"
+                    text="Играете через другой лаунчер. Тогда поставьте хотя бы наш мод, покажем как."
+                  />
+                </div>
+              </>
+            )}
+
+            {step === "mod" && (
+              <>
+                <Title icon={<Puzzle />} title="Поставьте мод MineHouse">
+                  Пожалуйста, не пропускайте этот шаг: без нашего мода часть сервера будет вам не видна. Это один
+                  файл, и для других игроков он ничего не меняет.
+                </Title>
+                <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">Что даёт мод</p>
+                  <ul className="mt-1.5 list-disc pl-5 text-muted-foreground">
+                    <li>кнопку «Играть на MineHouse» и онлайн в главном меню;</li>
+                    <li>настоящую цену починки в наковальне;</li>
+                    <li>видимые границы зон спавна.</li>
+                  </ul>
+                </div>
+                <ol className="flex flex-col gap-3 text-sm text-muted-foreground">
+                  <Item n={1}>
+                    Нужен Minecraft 26.3 с Fabric. Для ванильной игры поставьте Fabric установщиком, в своей
+                    сборке он уже есть.
+                  </Item>
+                  <Item n={2}>
+                    <p>
+                      Положите мод MineHouse и Fabric API в папку <span className="font-mono text-foreground">mods</span>.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => openUrl(LINKS.clientMod)}>
+                        <Download />
+                        Мод MineHouse
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openUrl(LINKS.fabricApi)}>
+                        <ExternalLink />
+                        Fabric API
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openUrl(LINKS.fabricInstaller)}>
+                        <ExternalLink />
+                        Установщик Fabric
+                      </Button>
+                    </div>
+                  </Item>
+                  <Item n={3}>
+                    <p>
+                      Подробно, с голосовым чатом и пингами тех же версий, что на сервере, в{" "}
+                      <Link onClick={() => openUrl(LINKS.startOwn)}>инструкции на сайте</Link>.
+                    </p>
+                  </Item>
+                </ol>
               </>
             )}
 
@@ -300,7 +427,16 @@ export function Onboarding({
               </>
             )}
 
-            {step === "done" && (
+            {step === "done" && way === "external" && (
+              <>
+                <Title icon={<Check />} title="Всё готово">
+                  Добавьте сервер play.minehouse.pro в «Сетевой игре» и заходите. Если захотите играть через наш
+                  лаунчер, онбординг можно пройти заново в настройках.
+                </Title>
+              </>
+            )}
+
+            {step === "done" && way !== "external" && (
               <>
                 <Title icon={<Check />} title="Всё готово">
                   Нажмите «Играть»: лаунчер скачает всё нужное в сборку «{activeInstance(info)?.name}» и зайдёт на
@@ -330,10 +466,12 @@ export function Onboarding({
               <Button variant="outline" size="lg" onClick={() => finish(false)}>
                 В лаунчер
               </Button>
-              <Button size="lg" className="min-w-36 font-semibold" onClick={() => finish(!!info.account)}>
-                {info.account ? <Play /> : null}
-                {info.account ? "Играть" : "Готово"}
-              </Button>
+              {way !== "external" && (
+                <Button size="lg" className="min-w-36 font-semibold" onClick={() => finish(!!info.account)}>
+                  {info.account ? <Play /> : null}
+                  {info.account ? "Играть" : "Готово"}
+                </Button>
+              )}
             </>
           ) : (
             <Button
@@ -354,6 +492,57 @@ export function Onboarding({
         </div>
       </footer>
     </div>
+  )
+}
+
+function WayChoice({
+  active,
+  onClick,
+  icon,
+  title,
+  badge,
+  text,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  title: string
+  badge?: string
+  text: string
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className={cn(
+        "flex gap-3 rounded-lg border p-3 text-left transition-colors",
+        active ? "border-primary bg-primary/5" : "hover:border-foreground/30"
+      )}
+    >
+      <span className="mt-0.5 text-muted-foreground [&_svg]:size-4">{icon}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          {title}
+          {badge && (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-normal text-secondary-foreground">
+              {badge}
+            </span>
+          )}
+        </span>
+        <span className="text-xs text-muted-foreground">{text}</span>
+      </span>
+      <span
+        aria-hidden
+        className={cn(
+          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+          active && "border-primary bg-primary text-primary-foreground"
+        )}
+      >
+        {active && <Check className="size-2.5" />}
+      </span>
+    </button>
   )
 }
 
