@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use crate::http::{self, Download, Hash};
 use crate::modpack::Manifest;
 use crate::modrinth::{self, Version};
+use crate::packs;
 use crate::paths::Paths;
 use crate::progress::Reporter;
 
@@ -446,14 +447,43 @@ async fn pick_version(
         .with_context(|| format!("нет версии для Fabric {}", pack.minecraft))
 }
 
-/// `project` and every required dependency it still lacks.
+/// A required dependency that is not a mod: a resource or shader pack
+/// (Punchy! Moves needs the resource pack Fluid & Foolish).
+#[derive(Debug, PartialEq, Eq)]
+struct PackDep {
+    kind: packs::Kind,
+    project: String,
+    title: String,
+}
+
+/// What a dependency of this Modrinth `project_type` is: a mod to plan, a
+/// pack to put in its folder, or something the launcher can't install.
+#[derive(Debug, PartialEq, Eq)]
+enum DepKind {
+    Mod,
+    Pack(packs::Kind),
+    Other,
+}
+
+fn dep_kind(project_type: &str) -> DepKind {
+    match project_type {
+        "" | "mod" => DepKind::Mod,
+        "resourcepack" => DepKind::Pack(packs::Kind::Resource),
+        "shader" => DepKind::Pack(packs::Kind::Shader),
+        _ => DepKind::Other,
+    }
+}
+
+/// `project` and every required dependency it still lacks: mods to put in
+/// `mods/`, and packs that go to `resourcepacks/` / `shaderpacks/`.
 async fn plan(
     client: &reqwest::Client,
     pack: &Pack,
     index: &Index,
     project: &str,
-) -> Result<Vec<Planned>> {
+) -> Result<(Vec<Planned>, Vec<PackDep>)> {
     let mut out: Vec<Planned> = Vec::new();
+    let mut pack_deps: Vec<PackDep> = Vec::new();
     let mut queue: Vec<(String, Option<String>)> = vec![(project.to_string(), None)];
     let mut seen: HashSet<String> = HashSet::new();
     while let Some((id, parent)) = queue.pop() {
@@ -465,6 +495,22 @@ async fn plan(
             .into_iter()
             .next()
             .with_context(|| format!("проект {id} не найден на Modrinth"))?;
+        if parent.is_some() {
+            match dep_kind(&info.project_type) {
+                DepKind::Mod => {}
+                DepKind::Pack(kind) => {
+                    pack_deps.push(PackDep {
+                        kind,
+                        project: info.id.clone(),
+                        title: info.title.clone(),
+                    });
+                    continue;
+                }
+                // A data pack or a modpack can't be a mod's dependency the
+                // launcher can install; the mod itself still goes in.
+                DepKind::Other => continue,
+            }
+        }
         let verdict = if parent.is_some() {
             pack.dependency_verdict(&info.id, &info.client_side, &info.server_side)
         } else {
@@ -489,7 +535,7 @@ async fn plan(
                 ),
             }
         }
-        if info.project_type != "mod" && !info.project_type.is_empty() {
+        if dep_kind(&info.project_type) != DepKind::Mod {
             bail!("{} — это не мод ({})", info.title, info.project_type);
         }
         let version = pick_version(client, pack, &info.id, &verdict).await?;
@@ -508,7 +554,29 @@ async fn plan(
             required_by: parent,
         });
     }
-    Ok(out)
+    Ok((out, pack_deps))
+}
+
+/// Puts the packs that installed mods need into their folders and turns them
+/// on. Packs already installed are left as the player set them.
+async fn install_pack_deps(
+    client: &reqwest::Client,
+    paths: &Paths,
+    pack: &Pack,
+    deps: Vec<PackDep>,
+) -> Result<Vec<String>> {
+    let mut titles = Vec::new();
+    for dep in deps {
+        if packs::installed_projects(paths, dep.kind).contains(&dep.project) {
+            continue;
+        }
+        let title =
+            packs::install_modrinth(client, paths, dep.kind, &dep.project, None, &pack.minecraft)
+                .await
+                .with_context(|| format!("мод поставлен, но не удалось поставить {}", dep.title))?;
+        titles.push(title);
+    }
+    Ok(titles)
 }
 
 /// Downloads planned versions into `mods/` and records them.
@@ -608,7 +676,7 @@ pub async fn install_modrinth(
     icon: Option<String>,
 ) -> Result<Vec<String>> {
     let mut index = reconcile(paths, pack)?;
-    let mut planned = plan(client, pack, &index, project).await?;
+    let (mut planned, pack_deps) = plan(client, pack, &index, project).await?;
     if let Some(first) = planned.iter_mut().find(|p| p.required_by.is_none()) {
         first.icon = icon;
     }
@@ -622,6 +690,8 @@ pub async fn install_modrinth(
     )
     .await?;
     save(paths, &index)?;
+    let mut titles = titles;
+    titles.extend(install_pack_deps(client, paths, pack, pack_deps).await?);
     Ok(titles)
 }
 
@@ -1047,6 +1117,18 @@ async fn sync_inner(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pack_dependencies_are_not_mods() {
+        assert_eq!(dep_kind("mod"), DepKind::Mod);
+        assert_eq!(dep_kind(""), DepKind::Mod);
+        assert_eq!(
+            dep_kind("resourcepack"),
+            DepKind::Pack(packs::Kind::Resource)
+        );
+        assert_eq!(dep_kind("shader"), DepKind::Pack(packs::Kind::Shader));
+        assert_eq!(dep_kind("datapack"), DepKind::Other);
+    }
+
     use super::*;
     use crate::modpack::{PackFile, ServerMod};
 
