@@ -115,6 +115,10 @@ export const LINKS = {
   login: "https://www.minehouse.pro/login",
   apply: "https://www.minehouse.pro/apply",
   start: "https://www.minehouse.pro/start",
+  startOwn: "https://www.minehouse.pro/start#svoya-sborka",
+  clientMod: "https://www.minehouse.pro/modpack/minehouse-client.jar",
+  fabricApi: "https://modrinth.com/mod/fabric-api",
+  fabricInstaller: "https://fabricmc.net/use/installer/",
   wiki: "https://wiki.minehouse.pro",
   discord: "https://discord.gg/gCYGxDzaCb",
 }
