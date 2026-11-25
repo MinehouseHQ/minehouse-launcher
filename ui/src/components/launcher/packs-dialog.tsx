@@ -264,6 +264,15 @@ export function PacksDialog({
           </Alert>
         )}
         {irisWarning}
+        {listing?.playing && (
+          <Alert>
+            <AlertDescription>
+              Игра запущена. Новые {kind === "resource" ? "ресурспаки" : "шейдеры"} сразу появятся в её меню{" "}
+              {kind === "resource" ? "«Пакеты ресурсов»" : "шейдеров Iris"}, а то, что включено здесь, игра подхватит
+              при следующем запуске. Чтобы включить прямо сейчас, сделайте это в игре.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {mode === "mine" ? (
           <div className="flex min-h-0 flex-1 flex-col gap-3">

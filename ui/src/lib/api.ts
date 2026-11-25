@@ -176,6 +176,8 @@ export type PacksListing = {
   minecraft: string
   /** Шейдерам нужен Iris из сборки. */
   iris: { ready: boolean; missing: string[] }
+  /** Игра этой сборки запущена: включение и порядок применятся при следующем запуске. */
+  playing: boolean
 }
 
 export type PackHit = Omit<SearchHit, "verdict" | "reason">

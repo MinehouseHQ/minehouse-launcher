@@ -421,12 +421,20 @@ pub fn remove(paths: &Paths, kind: Kind, file: &str) -> Result<()> {
 }
 
 fn remove_path(path: &Path) -> Result<()> {
-    if path.is_dir() {
-        std::fs::remove_dir_all(path)?;
+    let res = if path.is_dir() {
+        std::fs::remove_dir_all(path)
     } else if path.exists() {
-        std::fs::remove_file(path)?;
-    }
-    Ok(())
+        std::fs::remove_file(path)
+    } else {
+        Ok(())
+    };
+    // On Windows the running game keeps the packs it uses open.
+    res.with_context(|| {
+        format!(
+            "не удалось удалить {}: если игра запущена и пак включён, закройте её и попробуйте снова",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        )
+    })
 }
 
 /// Newer Modrinth versions for every pack of this kind. Returns the titles
