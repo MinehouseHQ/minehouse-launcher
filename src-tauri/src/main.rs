@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod account;
+mod feed;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -201,6 +202,7 @@ async fn login_finish(app: State<'_, Arc<App>>, code: DeviceCode) -> Res<Account
 #[tauri::command]
 async fn logout(app: State<'_, Arc<App>>) -> Res<()> {
     account::clear(&app.paths());
+    feed::clear(&app.root);
     Ok(())
 }
 
@@ -270,6 +272,81 @@ async fn news(app: State<'_, Arc<App>>) -> Res<serde_json::Value> {
         .map_err(|e| e.to_string())?;
     let res = res.error_for_status().map_err(|e| e.to_string())?;
     res.json().await.map_err(|e| e.to_string())
+}
+
+/// Ник, которым лаунчер вошёл в ленту, если вход ещё действует для текущего аккаунта.
+#[tauri::command]
+async fn feed_session(app: State<'_, Arc<App>>) -> Res<Option<String>> {
+    let account = account::load(&app.paths());
+    Ok(feed::load(&app.root)
+        .filter(|s| account.as_ref().is_some_and(|a| a.session.name == s.name))
+        .map(|s| s.name))
+}
+
+/// Войти в ленту аккаунтом Minecraft (проверка лицензии через Mojang, без Discord).
+#[tauri::command]
+async fn feed_login(app: State<'_, Arc<App>>) -> Res<serde_json::Value> {
+    let paths = app.paths();
+    let stored = account::load(&paths).ok_or("Сначала войдите через Microsoft")?;
+    let account = if stored.session.is_fresh() {
+        stored
+    } else {
+        let a = auth::refresh(&app.client, &stored).await.map_err(err)?;
+        account::save(&paths, &a).map_err(err)?;
+        a
+    };
+    feed::login(&app.client, &app.root, &account).await
+}
+
+#[tauri::command]
+async fn feed_timeline(
+    app: State<'_, Arc<App>>,
+    tab: String,
+    before: Option<String>,
+) -> Res<serde_json::Value> {
+    let mut q = vec![("tab", tab)];
+    if let Some(b) = before {
+        q.push(("before", b));
+    }
+    feed::get(&app.client, &app.root, "timeline", &q).await
+}
+
+#[tauri::command]
+async fn feed_thread(app: State<'_, Arc<App>>, code: String) -> Res<serde_json::Value> {
+    feed::get(&app.client, &app.root, "thread", &[("code", code)]).await
+}
+
+#[tauri::command]
+async fn feed_like(app: State<'_, Arc<App>>, id: u64, on: bool) -> Res<serde_json::Value> {
+    feed::post(
+        &app.client,
+        &app.root,
+        "like",
+        serde_json::json!({ "id": id, "on": on }),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn feed_post(
+    app: State<'_, Arc<App>>,
+    body: String,
+    reply_to: Option<u64>,
+) -> Res<serde_json::Value> {
+    feed::post(
+        &app.client,
+        &app.root,
+        "post",
+        serde_json::json!({ "body": body, "reply_to": reply_to }),
+    )
+    .await
+}
+
+/// Открыть или закрыть панель ленты: окно расширяется вправо на `width` точек.
+/// false — окно развёрнуто, его размер не меняли.
+#[tauri::command]
+fn feed_panel(handle: AppHandle, open: bool, width: f64) -> Res<bool> {
+    feed::resize(&handle, open, width)
 }
 
 /// Opens an https link in the default browser. Done on the Rust side so the
@@ -1094,6 +1171,13 @@ fn main() {
             profile_remove,
             profile_select,
             news,
+            feed_session,
+            feed_login,
+            feed_timeline,
+            feed_thread,
+            feed_like,
+            feed_post,
+            feed_panel,
             open_url,
             open_game_dir,
             open_mods_dir,

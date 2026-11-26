@@ -1,6 +1,7 @@
-import { BookOpen, Globe, MessageCircle } from "lucide-react"
+import { BookOpen, Globe, MessageCircle, Rss } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { LINKS, openUrl, type Info } from "@/lib/api"
 
 import { InstanceMenu } from "./instance-menu"
@@ -11,11 +12,15 @@ export function TopBar({
   running,
   onLog,
   onChanged,
+  feedOpen,
+  onFeed,
 }: {
   info: Info | null
   running: string[]
   onLog: (line: string) => void
   onChanged: () => Promise<void>
+  feedOpen: boolean
+  onFeed: () => void
 }) {
   const open = (url: string) =>
     openUrl(url).catch((e) => onLog(`Не удалось открыть ссылку: ${e}`))
@@ -26,6 +31,16 @@ export function TopBar({
       <span aria-hidden className="ml-1 text-muted-foreground/50">/</span>
       <InstanceMenu info={info} running={running} onChanged={onChanged} />
       <nav className="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-pressed={feedOpen}
+          onClick={onFeed}
+          className={cn(feedOpen && "bg-muted text-foreground")}
+        >
+          <Rss />
+          Лента
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => open(LINKS.site)}>
           <Globe />
           Сайт
