@@ -408,18 +408,18 @@ function PostCard({
         )}
         {post.status === "visible" && (
           <div className="-ml-2 mt-1 flex items-center gap-1 text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-            <Action label="Ответить" onClick={() => onOpen(post.code)}>
-              <MessageCircle className="size-4" /> {post.replies || ""}
-            </Action>
-            <Action label="Пересылки">
-              <Repeat2 className="size-4" /> {post.reposts || ""}
-            </Action>
             <Action
               label="Нравится"
               onClick={like}
               className={cn("hover:bg-rose-500/10 hover:text-rose-400", post.liked && "text-rose-400")}
             >
               <Heart className={cn("size-4", post.liked && "fill-current")} /> {post.likes || ""}
+            </Action>
+            <Action label="Пересылки">
+              <Repeat2 className="size-4" /> {post.reposts || ""}
+            </Action>
+            <Action label="Ответить" onClick={() => onOpen(post.code)}>
+              <MessageCircle className="size-4" /> {post.replies || ""}
             </Action>
           </div>
         )}
