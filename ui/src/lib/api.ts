@@ -183,3 +183,68 @@ export type PacksListing = {
 export type PackHit = Omit<SearchHit, "verdict" | "reason">
 export type PackSearch = { hits: PackHit[]; total: number }
 export type PacksAdded = { lines: string[]; kind: PackKind | null }
+
+// Лента www.minehouse.pro/feed (панель справа, src-tauri/src/feed.rs).
+export type FeedAuthor = {
+  discordId: string
+  nickname: string
+  linked: boolean
+  avatar: string
+  official: boolean
+  nitroColor: string | null
+}
+
+export type FeedMedia = {
+  kind: "image" | "video"
+  url: string
+  width: number | null
+  height: number | null
+  alt: string | null
+  fromGame: boolean
+}
+
+export type FeedPost = {
+  id: number
+  code: string
+  author: FeedAuthor
+  body: string
+  createdAt: string
+  source: "site" | "game" | "news"
+  status: "visible" | "pending" | "hidden" | "deleted"
+  hiddenReason: string | null
+  likes: number
+  replies: number
+  reposts: number
+  media: FeedMedia[]
+  quote: FeedPost | null
+  quoteMissing: boolean
+  replyTo: { code: string; nickname: string } | null
+  news: { slug: string; title: string; cover: string | null } | null
+  liked: boolean
+  reposted: boolean
+  mine: boolean
+  repostedBy: { nickname: string; discordId: string } | null
+  at: string
+}
+
+/** Кто смотрит ленту из лаунчера: ник лицензии и привязан ли он к сайту. */
+export type FeedMe = { name: string; linked: boolean; nickname: string | null; avatar: string | null }
+
+export type FeedTab = "all" | "following" | "news"
+
+export type FeedPage = { posts: FeedPost[]; next: string | null; me: FeedMe | null }
+
+export type FeedThread = { post: FeedPost; ancestors: FeedPost[]; replies: FeedPost[]; me: FeedMe | null }
+
+/** Ширина панели ленты: на столько окно расширяется вправо. */
+export const FEED_WIDTH = 380
+
+/** «5 мин», «3 ч», «2 дн», дальше дата. */
+export function shortTime(iso: string) {
+  const s = (Date.now() - Date.parse(iso)) / 1000
+  if (s < 60) return "сейчас"
+  if (s < 3600) return `${Math.floor(s / 60)} мин`
+  if (s < 86400) return `${Math.floor(s / 3600)} ч`
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)} дн`
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })
+}

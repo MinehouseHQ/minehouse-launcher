@@ -1,5 +1,7 @@
 import { useState } from "react"
 
+import { FeedPanel } from "@/components/launcher/feed-panel"
+
 import { BottomBar } from "@/components/launcher/bottom-bar"
 import { DropOverlay } from "@/components/launcher/drop-overlay"
 import { Hero } from "@/components/launcher/hero"
@@ -15,7 +17,7 @@ import { TopBar } from "@/components/launcher/top-bar"
 import { UpdateBanner } from "@/components/launcher/update-banner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useLauncher } from "@/hooks/use-launcher"
-import { activeInstance, type PackKind } from "@/lib/api"
+import { activeInstance, FEED_WIDTH, invoke, type PackKind } from "@/lib/api"
 
 export function App() {
   const l = useLauncher()
@@ -36,6 +38,14 @@ export function App() {
   // Знакомство: само при первом запуске, ещё раз из настроек.
   const [tour, setTour] = useState(false)
   const onboarding = !!l.info && (tour || !l.info.setup_done)
+  // Лента справа: окно расширяется вправо на ширину панели, повторное нажатие сворачивает.
+  const [feedOpen, setFeedOpen] = useState(false)
+  const toggleFeed = async () => {
+    const open = !feedOpen
+    if (!open) setFeedOpen(false)
+    await invoke("feed_panel", { open, width: FEED_WIDTH }).catch(() => {})
+    if (open) setFeedOpen(true)
+  }
 
   const onPlay = () => {
     if (!l.info?.account) setLoginOpen(true)
@@ -44,9 +54,17 @@ export function App() {
 
   return (
     <TooltipProvider delay={300}>
-      <div className="relative flex h-full flex-col">
+      <div className="flex h-full">
+      <div className="relative flex h-full min-w-0 flex-1 flex-col">
         <UpdateBanner enabled={l.info?.self_update ?? false} />
-        <TopBar info={l.info} running={l.runningIds} onLog={l.pushLog} onChanged={l.refresh} />
+        <TopBar
+          info={l.info}
+          running={l.runningIds}
+          onLog={l.pushLog}
+          onChanged={l.refresh}
+          feedOpen={feedOpen}
+          onFeed={toggleFeed}
+        />
         <main className="relative isolate flex min-h-0 flex-1 flex-col">
           <Hero server={l.server} paused={l.anyPlaying} compact={showLog} />
           {showLog ? (
@@ -79,6 +97,8 @@ export function App() {
         {onboarding && l.info && (
           <Onboarding info={l.info} onChanged={l.refresh} onClose={() => setTour(false)} onPlay={l.play} />
         )}
+      </div>
+      {feedOpen && <FeedPanel info={l.info} onClose={toggleFeed} />}
       </div>
 
       <LoginDialog
