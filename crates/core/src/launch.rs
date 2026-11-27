@@ -156,9 +156,14 @@ pub async fn launch(
         .with_context(|| format!("start {}", inst.java.display()))?;
 
     let token = session.access_token.clone();
+    // «Stopping!» от Minecraft: игра закрывается. Если процесс после этого висит
+    // (чужой мод держит не-daemon поток, загрузка ресурспака без таймаута), лаунчер
+    // завершает его сам, иначе он навсегда остаётся «Играем…».
+    let stopping = std::sync::Arc::new(tokio::sync::Notify::new());
     let pipe = |r: Box<dyn tokio::io::AsyncRead + Unpin + Send>| {
         let reporter = reporter.clone();
         let token = token.clone();
+        let stopping = stopping.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(r).lines();
             let mut parser = Log4jParser::default();
@@ -172,6 +177,9 @@ pub async fn launch(
             };
             let emit = |p: Parsed| match p {
                 Parsed::Game(mut g) => {
+                    if is_stopping(&g.logger, &g.message) {
+                        stopping.notify_one();
+                    }
                     g.message = hide(g.message);
                     reporter.game(g);
                 }
@@ -189,14 +197,49 @@ pub async fn launch(
     };
     let out = pipe(Box::new(child.stdout.take().unwrap()));
     let err = pipe(Box::new(child.stderr.take().unwrap()));
-    let status = child.wait().await?;
-    let _ = tokio::join!(out, err);
+    let status = tokio::select! {
+        status = child.wait() => status?,
+        _ = async {
+            stopping.notified().await;
+            tokio::time::sleep(EXIT_GRACE).await;
+        } => {
+            reporter.log(format!(
+                "Игра закрылась, но процесс не завершился за {} с: завершаем его",
+                EXIT_GRACE.as_secs()
+            ));
+            let _ = child.start_kill();
+            child.wait().await?
+        }
+    };
+    // Висящий процесс мог оставить открытые трубы у потомков: не ждём их дольше пары секунд.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let _ = tokio::join!(out, err);
+    })
+    .await;
     Ok(status)
+}
+
+/// Сколько ждать выхода процесса после «Stopping!». Ванильный сторож выхода сам
+/// пишет краш через 15 с; ждём чуть дольше, чтобы он успел.
+const EXIT_GRACE: std::time::Duration = std::time::Duration::from_secs(25);
+
+fn is_stopping(logger: &str, message: &str) -> bool {
+    message == "Stopping!" && (logger.ends_with(".client.Minecraft") || logger == "Minecraft")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_client_stopping() {
+        assert!(is_stopping("net.minecraft.client.Minecraft", "Stopping!"));
+        assert!(!is_stopping(
+            "net.minecraft.server.MinecraftServer",
+            "Stopping server"
+        ));
+        assert!(!is_stopping("PlasmoVoice", "Stopping!x"));
+    }
 
     #[test]
     fn substitutes_known_vars_only() {
